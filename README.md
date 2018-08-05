@@ -2,7 +2,7 @@
 This project implements neural networks for text classification, based on PyTorch (0.4.0).  
 
 ## test accuracy 
-|Model| Polling |IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
+|Model| Pooling |IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
 |:---:|:-------:|:-----:|:------:|:-------:|:-------:|
 |GRNN |Mean     |  |0.4691| | |
 |GRNN |Max      |  |0.4781| | |
