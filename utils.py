@@ -21,7 +21,7 @@ def cast_to_tensor(batch, device):
     batch_x = torch.tensor(batch_x, dtype=torch.int64, device=device)
     batch_y = torch.tensor(batch_y, dtype=torch.int64, device=device)
     batch_lens = torch.tensor(batch_lens, dtype=torch.int64, device=device)
-    return (batch_x, batch_y, batch_lens)
+    return batch_x, batch_y, batch_lens
     
 
 def sort_in_descending(batch_lens):

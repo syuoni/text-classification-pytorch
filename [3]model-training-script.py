@@ -9,15 +9,10 @@ from training import train_with_earlystop
     
 if __name__ == '__main__':
     #TODO: cannot repeat results with same random-seed specified?
-    n_hidden = 256
+    n_hidden = 150
     n_emb = 128
-    batch_size = 64
-    conv_size = 5
-    bidirectional = True
+    batch_size = 32
 #    rng = np.random.RandomState(1224)
-    
-    w2v_fn = 'w2v/enwiki.w2v'
-#    w2v_fn = None
     
     dataset = 'imdb'
     dn = 'model-res-%s' % dataset
@@ -30,14 +25,18 @@ if __name__ == '__main__':
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
+    use_hie = True
+    w2v_fn = 'w2v/enwiki.w2v'
+#    w2v_fn = None
+    
 #============================= ONE experiment ================================#
 #    train_set, valid_set, test_set = corpus.train_valid_test()
 #    train_with_validation(train_set, valid_set, use_w2v=False)
     
 #============================ Cross Validation ===============================#
-    for model_type, pooling in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
-        print(model_type, pooling)
-        save_dn = '%s/%s-%s' % (dn, model_type, pooling)
+    for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
+        print(nn_type, pooling_type)
+        save_dn = '%s/%s-%s-%s' % (dn, nn_type, pooling_type, use_hie)
         if not os.path.exists(save_dn):
             os.makedirs(save_dn)
         
@@ -47,7 +46,7 @@ if __name__ == '__main__':
             save_fn = '%s/model-%d.ckpt' % (save_dn, cv_idx)
             
             train_with_earlystop(corpus, device, n_hidden=n_hidden, n_emb=n_emb, batch_size=batch_size, 
-                                 model_type=model_type, pooling=pooling, bidirectional=bidirectional, conv_size=conv_size, 
+                                 use_hie=use_hie, nn_type=nn_type, pooling_type=pooling_type, 
                                  w2v_fn=w2v_fn, save_fn=save_fn, disp_proc=False)
             
-#            break
+            break

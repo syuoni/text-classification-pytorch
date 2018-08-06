@@ -24,7 +24,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #=========================== Metrics Calculation =============================#
 '''
-|Model| Polling |IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
+|Model| Pooling |IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
 |:---:|:-------:|:-----:|:------:|:-------:|:-------:|
 |GRNN |Mean     |  |0.4691| | |
 |GRNN |Max      |  |0.4781| | |
@@ -35,7 +35,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 |CNN  |Mean     |  |0.4011| | |
 |CNN  |Max      |  |0.4884| | |
 |CNN  |Attention|  | | | | |
-
 '''
 #=============================================================================#
 

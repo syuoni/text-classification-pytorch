@@ -7,7 +7,7 @@ import torch.optim as optim
 from gensim.models import Word2Vec
 
 from utils import init_embedding, cast_to_tensor
-from models import NNClassifier
+from models import FlatNNClassifier, HieNNClassifier
 
 
 def train_batch(classifier, batch, loss_func, optimizer):
@@ -45,11 +45,14 @@ def eval_batches(classifier, batches):
     
 
 def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32, 
-                         model_type='lstm', pooling='mean', bidirectional=True, conv_size=5, 
+                         use_hie=False, nn_type='gru', pooling_type='attention', 
                          w2v_fn=None, save_fn=None, disp_proc=True):
-    '''pooling_type: mean or max
-    model_type: lstm, rnn or cnn
-    use_w2v: whether to use pre-trained embeddings from word2vec
+    '''
+    Input:
+        use_hie: whether use hierarchical structure. 
+        nn_type: gru, lstm, conv
+        pooling_type: mean, max, attention
+        use_w2v: whether to use pre-trained embeddings from word2vec
     '''
     print('%d training samples' % corpus.train_size)
     print('%d validation samples' % corpus.dev_size)
@@ -57,9 +60,8 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
 #    rng = np.random.RandomState(1224)
 #    th_rng = RandomStreams(1224)
     
-    emb2hidden = model_type
     if save_fn is None:
-        save_fn = 'model-res/%s-%s.ckpt' % (emb2hidden, pooling)
+        save_fn = 'model-res/%s-%s-%s.ckpt' % (nn_type, pooling_type, use_hie)
     
     # Load Word2Vec 
     if w2v_fn is None:
@@ -72,14 +74,26 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
         pre_embedding = init_embedding(gensim_w2v, corpus.dic)
         
     # Define Model
-    if emb2hidden == 'conv':
-        classifier = NNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
-                                  emb2hidden=emb2hidden, pooling=pooling, 
-                                  num_layers=1, conv_size=conv_size)
+    if nn_type == 'conv':
+        nn_kwargs = {'num_layers': 1, 'conv_size': 5}
     else:
-        classifier = NNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
-                                  emb2hidden=emb2hidden, pooling=pooling, 
-                                  num_layers=1, bidirectional=bidirectional)
+        nn_kwargs = {'num_layers': 1, 'bidirectional': True}
+    if pooling_type == 'attention':
+        pooling_kwargs = {'hidden_dim': n_hidden, 'atten_dim': n_hidden}
+    else:
+        pooling_kwargs = {}    
+    layer_info = {'nn_type': nn_type, 
+                  'nn_kwargs': nn_kwargs, 
+                  'dropout_p': 0.5, 
+                  'pooling_type': pooling_type, 
+                  'pooling_kwargs': pooling_kwargs}
+    
+    if use_hie:
+        classifier = HieNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
+                                     word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
+    else:
+        classifier = FlatNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
+                                      word2doc_info=layer_info)
     classifier.to(device)
     
     # Loss and Optimizer
@@ -91,7 +105,7 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
     test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, shuffle=False, from_parts=['test']))    
     
     # Train the model
-    patience = 2500
+    patience = 3000
     patience_increase = 2
     improvement_threshold = 0.995
     disp_freq = 20
