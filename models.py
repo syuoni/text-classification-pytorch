@@ -200,6 +200,7 @@ class HieLayer(nn.Module):
             doc_list: tensor (float32) of shape (batch, sent_step_in_doc, hidden)
             doc_lens: tensor (int64) of shape (batch, )
         '''
+        # TODO: Make each doc as a batch fed into nn_layer, to save memory...
         device = batch_x.device
         doc_lens = []  # Number of sentences in documents
         sent_lens = [] # Number of words in sentence

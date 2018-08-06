@@ -11,7 +11,7 @@ if __name__ == '__main__':
     #TODO: cannot repeat results with same random-seed specified?
     n_hidden = 150
     n_emb = 128
-    batch_size = 32
+    batch_size = 16
 #    rng = np.random.RandomState(1224)
     
     dataset = 'imdb'
