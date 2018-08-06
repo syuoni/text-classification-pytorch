@@ -101,8 +101,8 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
 #    optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-8)
     optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
     
-    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size*5, shuffle=False, from_parts=['dev']))
-    test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, shuffle=False, from_parts=['test']))    
+    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['dev']))
+    test_batches = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['test']))    
     
     # Train the model
     patience = 3000
