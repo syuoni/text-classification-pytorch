@@ -9,7 +9,7 @@ from training import train_with_earlystop
     
 if __name__ == '__main__':
     #TODO: cannot repeat results with same random-seed specified?
-    n_hidden = 150
+    n_hidden = 256
     n_emb = 128
     batch_size = 32
 #    rng = np.random.RandomState(1224)
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
-    use_hie = True
+    use_hie = False
     w2v_fn = 'w2v/enwiki.w2v'
 #    w2v_fn = None
     
@@ -36,6 +36,8 @@ if __name__ == '__main__':
 #============================ Cross Validation ===============================#
     for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
         print(nn_type, pooling_type)
+#        if not (nn_type == 'lstm' and pooling_type == 'mean'):
+#            continue
         save_dn = '%s/%s-%s-%s' % (dn, nn_type, pooling_type, use_hie)
         if not os.path.exists(save_dn):
             os.makedirs(save_dn)
@@ -49,4 +51,4 @@ if __name__ == '__main__':
                                  use_hie=use_hie, nn_type=nn_type, pooling_type=pooling_type, 
                                  w2v_fn=w2v_fn, save_fn=save_fn, disp_proc=False)
             
-            break
+#            break

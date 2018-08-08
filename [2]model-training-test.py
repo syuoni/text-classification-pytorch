@@ -14,7 +14,7 @@ from models import HieNNClassifier, FlatNNClassifier
     
 if __name__ == '__main__':
     #TODO: cannot repeat results with same random-seed specified?
-    n_hidden = 150
+    n_hidden = 256
     n_emb = 128
     batch_size = 32
 #    rng = np.random.RandomState(1224)
@@ -25,10 +25,9 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
     use_hie = False
-#    nn_type = 'lstm'
 #    nn_type = 'gru'
-    nn_type = 'conv'
-    
+#    nn_type = 'lstm'
+    nn_type = 'conv'    
 #    pooling_type = 'mean'
 #    pooling_type = 'max'
     pooling_type = 'attention'

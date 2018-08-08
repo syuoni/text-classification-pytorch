@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from corpus import Corpus
-from models import NNClassifier, VotingClassifier
+from models import FlatNNClassifier, HieNNClassifier, VotingClassifier
 from training import eval_batches
 
 
@@ -26,28 +26,28 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 '''
 |Model| Pooling |IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
 |:---:|:-------:|:-----:|:------:|:-------:|:-------:|
-|GRNN |Mean     |  |0.4691| | |
-|GRNN |Max      |  |0.4781| | |
-|GRNN |Attention|  |0.4855| | |
-|LSTM |Mean     |  |0.3655| | |
-|LSTM |Max      |  |0.4836| | |
-|LSTM |Attention|  |0.4813| | |
-|CNN  |Mean     |  |0.4011| | |
-|CNN  |Max      |  |0.4884| | |
-|CNN  |Attention|  | | | | |
+|GRNN |Mean     | 0.9121|  0.4691| | |
+|GRNN |Max      | 0.9246|  0.4781| | |
+|GRNN |Attention| 0.9259|  0.4855| | |
+|LSTM |Mean     | 0.9068|  0.3855| | |
+|LSTM |Max      | 0.9234|  0.4836| | |
+|LSTM |Attention| 0.9233|  0.4813| | |
+|CNN  |Mean     | 0.9077|  0.4011| | |
+|CNN  |Max      | 0.9204|  0.4884| | |
+|CNN  |Attention| 0.9198|  0.4795| | |
 '''
 #=============================================================================#
+use_hie = False
 
 
-#model_type = 'lstm'
-#model_type = 'gru'
-model_type = 'conv'
-emb2hidden = model_type
-#pooling = 'mean'
-pooling = 'max'
-#pooling = 'attention'
+#nn_type = 'gru'
+nn_type = 'lstm'
+#nn_type = 'conv'
+pooling_type = 'mean'
+#pooling_type = 'max'
+#pooling_type = 'attention'
 
-save_dn = '%s/%s-%s' % (dn, model_type, pooling)
+save_dn = '%s/%s-%s-%s' % (dn, nn_type, pooling_type, use_hie)
 
 
 classifier_list = []
@@ -56,14 +56,27 @@ for cv_idx in range(5):
     print('Dev fold: %d' % cv_idx)
     save_fn = '%s/model-%d.ckpt' % (save_dn, cv_idx)
     # Define Model
-    if emb2hidden == 'conv':
-        classifier = NNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=None, 
-                                  emb2hidden=emb2hidden, pooling=pooling, 
-                                  num_layers=1, conv_size=conv_size)
+    # Define Model
+    if nn_type == 'conv':
+        nn_kwargs = {'num_layers': 1, 'conv_size': 5}
     else:
-        classifier = NNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=None, 
-                                  emb2hidden=emb2hidden, pooling=pooling, 
-                                  num_layers=1, bidirectional=bidirectional)
+        nn_kwargs = {'num_layers': 1, 'bidirectional': True}
+    if pooling_type == 'attention':
+        pooling_kwargs = {'hidden_dim': n_hidden, 'atten_dim': n_hidden}
+    else:
+        pooling_kwargs = {}    
+    layer_info = {'nn_type': nn_type, 
+                  'nn_kwargs': nn_kwargs, 
+                  'dropout_p': 0.5, 
+                  'pooling_type': pooling_type, 
+                  'pooling_kwargs': pooling_kwargs}
+    
+    if use_hie:
+        classifier = HieNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=None, 
+                                     word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
+    else:
+        classifier = FlatNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=None, 
+                                      word2doc_info=layer_info)
     classifier.load_state_dict(torch.load(save_fn))
     classifier_list.append(classifier)
 
