@@ -24,10 +24,10 @@ if __name__ == '__main__':
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
-    use_hie = False
-#    nn_type = 'gru'
+    use_hie = True
+    nn_type = 'gru'
 #    nn_type = 'lstm'
-    nn_type = 'conv'    
+#    nn_type = 'conv'
 #    pooling_type = 'mean'
 #    pooling_type = 'max'
     pooling_type = 'attention'
@@ -62,10 +62,10 @@ if __name__ == '__main__':
                   'pooling_kwargs': pooling_kwargs}
     
     if use_hie:
-        classifier = HieNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
+        classifier = HieNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
                                      word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
     else:
-        classifier = FlatNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
+        classifier = FlatNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
                                       word2doc_info=layer_info)
     classifier.to(device)
     

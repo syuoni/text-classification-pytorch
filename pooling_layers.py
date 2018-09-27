@@ -69,7 +69,7 @@ class AttenLayer(nn.Module):
             atten_outs: tensor (float32) of (batch, hidden)
         '''
         # proj: tensor (float32) of shape (batch, step, atten)
-        proj = F.tanh(self.project(nn_outs))
+        proj = torch.tanh(self.project(nn_outs))
         
         # atten: tensor (float32) of shape (batch, step)
         # torch.matmul: batched matrix x broadcasted vector

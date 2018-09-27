@@ -17,7 +17,7 @@ def train_batch(classifier, batch, loss_func, optimizer):
     cat_scores = classifier(batch_x, batch_lens)
     loss = loss_func(cat_scores, batch_y)
     loss.backward()
-#    nn.utils.clip_grad_norm_(classifier.parameters(), 1.0)
+    nn.utils.clip_grad_norm_(classifier.parameters(), 1.0)
     optimizer.step()
     return loss.item()
     
@@ -54,8 +54,8 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
         pooling_type: mean, max, attention
         use_w2v: whether to use pre-trained embeddings from word2vec
     '''
-    print('%d training samples' % corpus.train_size)
-    print('%d validation samples' % corpus.dev_size)
+    print('%d training samples' % corpus.current_split_sizes[0])
+    print('%d validation samples' % corpus.current_split_sizes[1])
     
 #    rng = np.random.RandomState(1224)
 #    th_rng = RandomStreams(1224)
@@ -71,7 +71,7 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
         if not os.path.exists(w2v_fn):
             raise Exception('Word2Vec model does NOT exist!', w2v_fn)
         gensim_w2v = Word2Vec.load(w2v_fn)
-        pre_embedding = init_embedding(gensim_w2v, corpus.dic)
+        pre_embedding = init_embedding(gensim_w2v, corpus.current_dic)
         
     # Define Model
     if nn_type == 'conv':
@@ -89,10 +89,10 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
                   'pooling_kwargs': pooling_kwargs}
     
     if use_hie:
-        classifier = HieNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
+        classifier = HieNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
                                      word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
     else:
-        classifier = FlatNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
+        classifier = FlatNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
                                       word2doc_info=layer_info)
     classifier.to(device)
     
@@ -102,14 +102,13 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
     optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
     
     dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['dev']))
-    test_batches = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['test']))    
     
     # Train the model
-    patience = 3000
+    patience = 5000
     patience_increase = 2
     improvement_threshold = 0.995
     disp_freq = 20
-    validation_freq = 200
+    validation_freq = 100
     
     max_epoch = 500
     best_iter = 0
@@ -140,8 +139,6 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
                         
                     best_validation_err = this_validation_err
                     best_iter = uidx
-                    test_err = eval_batches(classifier, test_batches)
-                    print('    epoch %i, minibatch %i, test error %f %%' % (epoch, uidx, test_err*100))
                     
                     torch.save(classifier.state_dict(), save_fn)
                     # classifier.load_state_dict(torch.load(save_fn))
@@ -151,7 +148,7 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
                 break
         
     end_time = time.time()
-    print('Optimization complete with best validation score of %f %%, at iter %d, with test performance %f %%' % (best_validation_err * 100, best_iter, test_err * 100))
+    print('Optimization complete with best validation score of %f %%, at iter %d' % (best_validation_err * 100, best_iter))
     print('The code run for %d epochs, with %f epochs/sec' % (epoch, 1. * epoch / (end_time - start_time)))
     
     

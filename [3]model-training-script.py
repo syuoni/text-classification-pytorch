@@ -14,7 +14,9 @@ if __name__ == '__main__':
     batch_size = 32
 #    rng = np.random.RandomState(1224)
     
-    dataset = 'imdb'
+#    dataset = 'imdb'
+    dataset = 'yelp-2013-seg-20-20'
+#    dataset = 'yelp-2014-seg-20-20'
     dn = 'model-res-%s' % dataset
     if not os.path.exists(dn):
         os.makedirs(dn)

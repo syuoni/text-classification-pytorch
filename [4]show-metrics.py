@@ -15,7 +15,9 @@ batch_size = 64
 conv_size = 5
 bidirectional = True
 
-dataset = 'imdb'
+#dataset = 'imdb'
+dataset = 'yelp-2013-seg-20-20'
+#dataset = 'yelp-2014-seg-20-20'
 dn = 'model-res-%s' % dataset
 corpus = Corpus.load_from_file('%s/%s-with-cv.pkl' % (dn, dataset))
 test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, shuffle=False, from_parts=['test']))
@@ -26,26 +28,26 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 '''
 |Model| Pooling |IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
 |:---:|:-------:|:-----:|:------:|:-------:|:-------:|
-|GRNN |Mean     | 0.9121|  0.4691| | |
-|GRNN |Max      | 0.9246|  0.4781| | |
-|GRNN |Attention| 0.9259|  0.4855| | |
-|LSTM |Mean     | 0.9068|  0.3855| | |
-|LSTM |Max      | 0.9234|  0.4836| | |
-|LSTM |Attention| 0.9233|  0.4813| | |
-|CNN  |Mean     | 0.9077|  0.4011| | |
-|CNN  |Max      | 0.9204|  0.4884| | |
-|CNN  |Attention| 0.9198|  0.4795| | |
+|GRNN |Mean     | 0.9121|  0.4691|   0.6171| |
+|GRNN |Max      | 0.9246|  0.4781|   0.6244| |
+|GRNN |Attention| 0.9259|  0.4855|   0.6241| |
+|LSTM |Mean     | 0.9068|  0.3855|   0.6107| |
+|LSTM |Max      | 0.9234|  0.4836|   0.6239| |
+|LSTM |Attention| 0.9233|  0.4813|   0.6222| |
+|CNN  |Mean     | 0.9077|  0.4011|   0.5987| |
+|CNN  |Max      | 0.9204|  0.4884|   0.6314| |
+|CNN  |Attention| 0.9198|  0.4795|   0.6175| |
 '''
 #=============================================================================#
 use_hie = False
 
 
 #nn_type = 'gru'
-nn_type = 'lstm'
-#nn_type = 'conv'
-pooling_type = 'mean'
+#nn_type = 'lstm'
+nn_type = 'conv'
+#pooling_type = 'mean'
 #pooling_type = 'max'
-#pooling_type = 'attention'
+pooling_type = 'attention'
 
 save_dn = '%s/%s-%s-%s' % (dn, nn_type, pooling_type, use_hie)
 
@@ -55,7 +57,6 @@ classifier_list = []
 for cv_idx in range(5):
     print('Dev fold: %d' % cv_idx)
     save_fn = '%s/model-%d.ckpt' % (save_dn, cv_idx)
-    # Define Model
     # Define Model
     if nn_type == 'conv':
         nn_kwargs = {'num_layers': 1, 'conv_size': 5}
