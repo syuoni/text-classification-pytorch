@@ -6,15 +6,15 @@ import torch.nn.functional as F
 from utils import reinit_parameters_
 
 
-def construct_pooling_layer(pooling_kwargs):
-    if pooling_kwargs['type'] == 'max':
+def construct_pooling_layer(pooling_type, pooling_kwargs):
+    if pooling_type == 'max':
         layer = MaxPoolingLayer()
-    elif pooling_kwargs['type'] == 'mean':
+    elif pooling_type == 'mean':
         layer = MeanPoolingLayer()
-    elif pooling_kwargs['type'] == 'attention':
-        layer = AttenLayer(pooling_kwargs['hidden_dim'], pooling_kwargs['atten_dim'])
+    elif pooling_type == 'attention':
+        layer = AttenLayer(**pooling_kwargs)
     else:
-        raise Exception('Invalid Pooling type!', pooling_kwargs['type'])
+        raise Exception('Invalid Pooling type!', pooling_type)
     return layer
 
 
@@ -69,62 +69,27 @@ class AttenLayer(nn.Module):
             atten_outs: tensor (float32) of (batch, hidden)
         '''
         # proj: tensor (float32) of shape (batch, step, atten)
-        proj = F.tanh(self.project(nn_outs))
+        proj = torch.tanh(self.project(nn_outs))
         
         # atten: tensor (float32) of shape (batch, step)
         # torch.matmul: batched matrix x broadcasted vector
         atten = proj.matmul(self.context)
-        # atten_outs: tensor (float32) of (batch, hidden)
-        atten_outs = []
+        
+#        atten_outs = []
+#        for batch_idx in range(atten.size(0)):
+#            this_atten = F.softmax(atten[batch_idx, :batch_lens[batch_idx].item()], dim=-1)
+#            this_nn_outs = nn_outs[batch_idx, :batch_lens[batch_idx].item()]
+#            atten_outs.append(this_nn_outs.transpose(1, 0).mv(this_atten))
+#        atten_outs = torch.stack(atten_outs)
+        
+        # NOTE: use requires_grad=False to avoid it being a "leaf variable". 
+        # atten_softmax: tensor (float32) of shape (batch, step)
+        atten_softmax = torch.zeros_like(atten, requires_grad=False)
         for batch_idx in range(atten.size(0)):
-            this_atten = F.softmax(atten[batch_idx, :batch_lens[batch_idx].item()], dim=-1)
-            this_nn_outs = nn_outs[batch_idx, :batch_lens[batch_idx].item()]
-            atten_outs.append(this_nn_outs.transpose(1, 0).mv(this_atten))
-        return torch.stack(atten_outs)
-    
-
-class HiePoolingLayer(nn.Module):
-    def __init__(self, pooling_layer):
-        super(HiePoolingLayer, self).__init__()
-        self.pooling_layer = pooling_layer
-            
-    def forward(self, nn_outs, batch_x):
-        '''
-        Input:
-            nn_outs: tensor (float32) of shape (batch, step, emb)
-            batch_x: tensor (int64) of shape (batch, step)
-        Return:
-            interm_outs: tensor (float32) of shape (batch, interm_step, hidden)
-            interm_batch_lens: tensor (int64) of shape (batch, )
-        '''
-        interm_hidden_list = []
-        interm_batch_lens = []        
-        for batch_idx in range(batch_x.size(0)):            
-            cuts = torch.arange(batch_x.size(1), dtype=torch.int64, device=batch_x.device)[batch_x[batch_idx]==1] + 1
-            
-            sub_pooled_outs_list = []
-            for cut_idx in range(cuts.size(0)):
-                cut0 = 0 if cut_idx == 0 else cuts[cut_idx-1]
-#                print(batch_x[batch_idx, cut0:cuts[cut_idx]][-1])
-                
-                # sub_outs: tensor (float32) of shape (sub_step, hidden)
-                sub_outs = nn_outs[batch_idx, cut0:cuts[cut_idx]]
-                # sub_pooled_outs: tensor (float32) of shape (1, hidden)
-                sub_pooled_outs = self.pooling_layer(sub_outs.unsqueeze(0), 
-                                                     torch.tensor([sub_outs.size(0)], device=batch_x.device))
-                sub_pooled_outs_list.append(sub_pooled_outs)
-                
-#            import pdb; pdb.set_trace()
-            interm_hidden = torch.cat(sub_pooled_outs_list)
-            interm_hidden_list.append(interm_hidden)
-            interm_batch_lens.append(interm_hidden.size(0))
-            
-        maxlen = max(interm_batch_lens)
-        interm_hidden_list = [F.pad(interm_hidden_list[i], (0, 0, 0, maxlen-interm_batch_lens[i])) for i in range(batch_x.size(0))]
+            atten_softmax[batch_idx, :batch_lens[batch_idx].item()] = F.softmax(atten[batch_idx, :batch_lens[batch_idx].item()], dim=-1)
         
-#        for x in interm_hidden_list:
-#            print(x.size())
-        
-        return torch.stack(interm_hidden_list), torch.tensor(interm_batch_lens, device=batch_x.device)
+        # atten_outs: tensor (float32) of (batch, hidden)
+        atten_outs = atten_softmax.unsqueeze(1).matmul(nn_outs).squeeze(1)
+        return atten_outs
     
     

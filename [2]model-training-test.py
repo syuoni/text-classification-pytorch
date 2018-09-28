@@ -17,29 +17,24 @@ if __name__ == '__main__':
     n_hidden = 256
     n_emb = 128
     batch_size = 32
-    conv_size = 5
 #    rng = np.random.RandomState(1224)
     
     dataset = 'imdb'
     corpus = Corpus.load_from_file('dataset/%s-prep.pkl' % dataset)
-    corpus.create_cv(n_splits=5)
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
-#    nn_type = 'lstm'
+    use_hie = True
     nn_type = 'gru'
+#    nn_type = 'lstm'
 #    nn_type = 'conv'
-#    pooling = 'mean'
-#    pooling = 'max'
-    pooling = 'attention'
-
-    bidirectional = True
+#    pooling_type = 'mean'
+#    pooling_type = 'max'
+    pooling_type = 'attention'
+    
 #    w2v_fn = 'w2v/enwiki.w2v'
     w2v_fn = None
-    save_fn = 'model-res/%s-%s.ckpt' % (nn_type, pooling)
-    
-#    if bidirectional:
-#        n_hidden = n_hidden * 2
+    save_fn = 'model-res/%s-%s-%s.ckpt' % (nn_type, pooling_type, use_hie)
     
     # Load Word2Vec 
     if w2v_fn is None:
@@ -52,25 +47,35 @@ if __name__ == '__main__':
         pre_embedding = init_embedding(gensim_w2v, corpus.dic)
         
     # Define Model
-    nn_kwargs = {'type': nn_type, 'num_layers': 1, 'bidirectional': True, 'conv_size': 5}
-    pooling_kwargs = {'type': pooling, 'hidden_dim': n_hidden, 'atten_dim': n_hidden}
-    emb2hidden_kwargs = {'nn_kwargs': nn_kwargs, 
-                         'dropout_p': 0.5, 
-                         'pooling_kwargs': pooling_kwargs}
+    if nn_type == 'conv':
+        nn_kwargs = {'num_layers': 1, 'conv_size': 5}
+    else:
+        nn_kwargs = {'num_layers': 1, 'bidirectional': True}
+    if pooling_type == 'attention':
+        pooling_kwargs = {'hidden_dim': n_hidden, 'atten_dim': n_hidden}
+    else:
+        pooling_kwargs = {}    
+    layer_info = {'nn_type': nn_type, 
+                  'nn_kwargs': nn_kwargs, 
+                  'dropout_p': 0.5, 
+                  'pooling_type': pooling_type, 
+                  'pooling_kwargs': pooling_kwargs}
     
-    classifier = HieNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
-                                 word2sent_kwargs=emb2hidden_kwargs, sent2doc_kwargs=emb2hidden_kwargs)
-#    classifier = FlatNNClassifier(corpus.dic.size, n_emb, n_hidden, corpus.n_type, pre_embedding=pre_embedding, 
-#                                  word2doc_kwargs=emb2hidden_kwargs)
+    if use_hie:
+        classifier = HieNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
+                                     word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
+    else:
+        classifier = FlatNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
+                                      word2doc_info=layer_info)
     classifier.to(device)
     
     # Loss and Optimizer
     loss_func = nn.NLLLoss()
-#    optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-8)
-    optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
+    optimizer = optim.Adamax(classifier.parameters(), lr=0.001, weight_decay=1e-8)
+#    optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
     
-    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size*5, shuffle=False, from_parts=['dev']))
-    test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, shuffle=False, from_parts=['test']))
+    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['dev']))
+    test_batches = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['test']))
     
     # Train the model
     patience = 2500

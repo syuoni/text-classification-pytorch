@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from utils import reinit_parameters_, reinit_parameters_gru_, reinit_parameters_lstm_
 from utils import sort_in_descending
 
 
-def construct_nn_layer(emb_dim, hidden_dim, nn_kwargs):
-    if nn_kwargs['type'] == 'gru':
-        layer = GRULayer(emb_dim, hidden_dim, nn_kwargs['num_layers'], nn_kwargs['bidirectional'])
-    elif nn_kwargs['type'] == 'lstm':
-        layer = LSTMLayer(emb_dim, hidden_dim, nn_kwargs['num_layers'], nn_kwargs['bidirectional'])
-    elif nn_kwargs['type'] == 'conv':
-        layer = ConvLayer(emb_dim, hidden_dim, nn_kwargs['num_layers'], nn_kwargs['conv_size'])
+def construct_nn_layer(emb_dim, hidden_dim, nn_type, nn_kwargs):
+    if nn_type == 'gru':
+        layer = GRULayer(emb_dim, hidden_dim, **nn_kwargs)
+    elif nn_type == 'lstm':
+        layer = LSTMLayer(emb_dim, hidden_dim, **nn_kwargs)
+    elif nn_type == 'conv':
+        layer = ConvLayer(emb_dim, hidden_dim, **nn_kwargs)
     else:
-        raise Exception('Invalid NN type!', nn_kwargs['type'])
+        raise Exception('Invalid NN type!', nn_type)
     return layer
 
 
 class ConvLayer(nn.Module):
-    # TODO: num_layers
     def __init__(self, emb_dim, hidden_dim, num_layers=1, conv_size=5):
         super(ConvLayer, self).__init__()
         self.emb_dim = emb_dim
@@ -30,8 +30,13 @@ class ConvLayer(nn.Module):
         self.conv_size = conv_size
         self.padding = (conv_size - 1) // 2
         
-        self.conv = nn.Conv1d(emb_dim, hidden_dim, conv_size, padding=self.padding)
-        reinit_parameters_(self.conv)
+        for i in range(self.num_layers):
+            if i == 0:
+                this_conv = nn.Conv1d(emb_dim, hidden_dim, conv_size, padding=self.padding)
+            else:
+                this_conv = nn.Conv1d(hidden_dim, hidden_dim, conv_size, padding=self.padding)
+            reinit_parameters_(this_conv)
+            setattr(self, 'conv_%d' % i, this_conv)
         
     def forward(self, embed, batch_lens):
         '''
@@ -41,14 +46,29 @@ class ConvLayer(nn.Module):
         Return:
             nn_outs: tensor (float32) of shape (batch, step, hidden)
         '''
-        # (batch, step, emb) -> (batch, emb, step) -> 
+        # RNN units use packed_sequence, which ensures padding areas with value 0, 
+        # while using CNN units, it should be manually ensured...
+        for batch_idx in range(embed.size(0)):
+            embed[batch_idx, batch_lens[batch_idx].item():].fill_(0)
+            
+        # (batch, step, emb) -> (batch, emb, step)
+        # The shape of hidden is (batch, emb, step) for now, 
+        # and becomes (batch, hidden, step) after the first conv_layer. 
+        hidden = embed.permute(0, 2, 1)
+        
+        # hidden: tensor (float32) of shape (batch, hidden, step)
+        for i in range(self.num_layers):
+            this_conv = getattr(self, 'conv_%d' % i)
+            hidden = F.relu(this_conv(hidden))
+        
         # (batch, hidden, step) -> (batch, step, hidden)
         # outs: tensor (float32) of shape (batch, step, hidden)
-        outs = self.conv(embed.permute(0, 2, 1)).permute(0, 2, 1)
+        outs = hidden.permute(0, 2, 1)
+        
         # Fill the positions beyond valid lengths with zeros, consistent with 
         # the results of pad_packed_sequence
         for batch_idx in range(outs.size(0)):
-            outs[batch_idx, batch_lens[batch_idx]:].fill_(0)
+            outs[batch_idx, batch_lens[batch_idx].item():].fill_(0)
         return outs
     
     

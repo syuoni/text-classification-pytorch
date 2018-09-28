@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 from collections import Counter
-from gensim import corpora
 import pickle
 
 dataset = 'imdb'
@@ -25,7 +24,7 @@ for part in ['train', 'dev', 'test']:
             data.append(this_data)
             
             
-df = pd.DataFrame(data, columns=['user', 'product', 'rating', 'text', 'part'])
+df = pd.DataFrame(data, columns=['user', 'product', 'rating', 'text', 'part_default'])
 df['rating'] = df['rating'].astype(np.int)
 df['rating'] = df['rating'] - 1
 
@@ -37,36 +36,26 @@ for text in df['text']:
         doc.append('<EOS>')
     doc_set.append(doc)
 
-# Frequency counter
+# Count word frequency 
 freq = Counter([w for doc in doc_set for w in doc])
 freq_df = pd.DataFrame([[w, f] for w, f in freq.items()], columns=['word', 'freq'])
 freq_df = freq_df.sort_values('freq', ascending=False)
 freq_df.to_excel('dataset/freq/word-freq-%s.xlsx' % dataset, 'freq', index=False)
 
-# Replace low-frequncy words with <UNK>
-freq_crit = 10
-doc_set = [[w if freq[w] >= freq_crit else '<UNK>' for w in doc] for doc in doc_set]
-
-# Build dictionay
-# <UNK> Unknow: 0
-# <EOS> end-of-sentence: 1
-dic = corpora.Dictionary([['<UNK>'], ['<EOS>']])
-print(dic.token2id)
-dic.add_documents(doc_set)
-
-# Cast words to word_ids
-doc_set = [[dic.token2id[w] for w in doc] for doc in doc_set]
-df['wid_seq'] = doc_set
-df['wid_seq_len'] = df['wid_seq'].str.len()
-
-#df['wid_seq_len'].hist(bins=50)
-print(df['wid_seq_len'].quantile(0.9), maxlen)
-df = df.loc[df['wid_seq_len'] <= maxlen].reset_index(drop=True)
-
+# Map pattern to word
 pat2word = None
+
+# Make Dataframe
+df['w_seq'] = doc_set
+df['w_seq_len'] = df['w_seq'].str.len()
+#df['w_seq_len'].hist(bins=50)
+
+print(df['w_seq_len'].quantile(0.9), maxlen)
+df = df.loc[df['w_seq_len'] <= maxlen].reset_index(drop=True)
 
 # Dump corpus
 with open('dataset/%s-prep.pkl' % dataset, 'wb') as f:
-    pickle.dump(dic.token2id, f)
-    pickle.dump(pat2word, f)
     pickle.dump(df, f)
+    pickle.dump(pat2word, f)
+    
+    
