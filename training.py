@@ -7,7 +7,7 @@ import torch.optim as optim
 from gensim.models import Word2Vec
 
 from utils import init_embedding, cast_to_tensor
-from models import FlatNNClassifier, HieNNClassifier
+from models import construct_classifier
 
 
 def train_batch(classifier, batch, loss_func, optimizer):
@@ -17,6 +17,7 @@ def train_batch(classifier, batch, loss_func, optimizer):
     cat_scores = classifier(batch_x, batch_lens)
     loss = loss_func(cat_scores, batch_y)
     loss.backward()
+    # Clip the gradients
     nn.utils.clip_grad_norm_(classifier.parameters(), 1.0)
     optimizer.step()
     return loss.item()
@@ -73,27 +74,9 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
         gensim_w2v = Word2Vec.load(w2v_fn)
         pre_embedding = init_embedding(gensim_w2v, corpus.current_dic)
         
-    # Define Model
-    if nn_type == 'conv':
-        nn_kwargs = {'num_layers': 1, 'conv_size': 5}
-    else:
-        nn_kwargs = {'num_layers': 1, 'bidirectional': True}
-    if pooling_type == 'attention':
-        pooling_kwargs = {'hidden_dim': n_hidden, 'atten_dim': n_hidden}
-    else:
-        pooling_kwargs = {}    
-    layer_info = {'nn_type': nn_type, 
-                  'nn_kwargs': nn_kwargs, 
-                  'dropout_p': 0.5, 
-                  'pooling_type': pooling_type, 
-                  'pooling_kwargs': pooling_kwargs}
-    
-    if use_hie:
-        classifier = HieNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
-                                     word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
-    else:
-        classifier = FlatNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
-                                      word2doc_info=layer_info)
+    classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
+                                      pre_embedding=pre_embedding, use_hie=use_hie, 
+                                      nn_type=nn_type, pooling_type=pooling_type)
     classifier.to(device)
     
     # Loss and Optimizer

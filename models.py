@@ -9,6 +9,33 @@ from nn_layers import construct_nn_layer
 from pooling_layers import construct_pooling_layer
 
 
+def construct_classifier(voc_size, emb_dim, hidden_dim, cat_size, pre_embedding=None, 
+                         use_hie=False, nn_type='gru', pooling_type='attention'):
+    '''Construct a classifier with default configuration.
+    '''
+    if nn_type == 'conv':
+        nn_kwargs = {'num_layers': 1, 'conv_size': 5}
+    else:
+        nn_kwargs = {'num_layers': 1, 'bidirectional': True}
+    if pooling_type == 'attention':
+        pooling_kwargs = {'hidden_dim': hidden_dim, 'atten_dim': hidden_dim}
+    else:
+        pooling_kwargs = {}    
+    layer_info = {'nn_type': nn_type, 
+                  'nn_kwargs': nn_kwargs, 
+                  'dropout_p': 0.5, 
+                  'pooling_type': pooling_type, 
+                  'pooling_kwargs': pooling_kwargs}
+    
+    if use_hie:
+        classifier = HieNNClassifier(voc_size, emb_dim, hidden_dim, cat_size, pre_embedding=pre_embedding, 
+                                     word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
+    else:
+        classifier = FlatNNClassifier(voc_size, emb_dim, hidden_dim, cat_size, pre_embedding=pre_embedding, 
+                                      word2doc_info=layer_info)
+    return classifier
+
+
 class NNClassifier(nn.Module):
     '''
     Flat structure: 
