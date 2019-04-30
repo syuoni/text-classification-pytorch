@@ -4,11 +4,11 @@ import pandas as pd
 from collections import Counter
 import pickle
 
-dataset = 'imdb'
-maxlen = 800
+#dataset = 'imdb'
+#maxlen = 800
 #dataset = 'yelp-2013-seg-20-20'
-#dataset = 'yelp-2014-seg-20-20'
-#maxlen = 500
+dataset = 'yelp-2014-seg-20-20'
+maxlen = 500
 
 data = []
 for part in ['train', 'dev', 'test']:
@@ -22,8 +22,11 @@ for part in ['train', 'dev', 'test']:
             this_data = [x.strip() for x in line.split('\t\t')]
             this_data.append(part)
             data.append(this_data)
-            
-            
+
+# Rename dataset
+dataset = '-'.join(dataset.split('-')[:2])
+
+# Cast to dataframe
 df = pd.DataFrame(data, columns=['user', 'product', 'rating', 'text', 'part_default'])
 df['rating'] = df['rating'].astype(np.int)
 df['rating'] = df['rating'] - 1

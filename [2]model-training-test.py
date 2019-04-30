@@ -9,32 +9,36 @@ from gensim.models import Word2Vec
 from corpus import Corpus
 from training import train_batch, eval_batches
 from utils import init_embedding
-from models import HieNNClassifier, FlatNNClassifier
+from models import construct_classifier
     
     
 if __name__ == '__main__':
+#    for lr in [1.0, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005, 0.0002, 0.0001]:
+#    for lr in [0.0005, 0.0002, 0.0001]:
     #TODO: cannot repeat results with same random-seed specified?
-    n_hidden = 256
+    n_hidden = 128
     n_emb = 128
     batch_size = 32
 #    rng = np.random.RandomState(1224)
     
-    dataset = 'imdb'
-    corpus = Corpus.load_from_file('dataset/%s-prep.pkl' % dataset)
-    
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
-    use_hie = True
+    use_hie = False
+    w2v_fn = 'w2v/enwiki.w2v'
+#    w2v_fn = None
+    
+#    dataset = 'imdb'
+    dataset = 'yelp-2013'
+#    dataset = 'yelp-2014'
+    corpus = Corpus.load_from_file('dataset/%s-prep.pkl' % dataset)
+    
+    
     nn_type = 'gru'
 #    nn_type = 'lstm'
 #    nn_type = 'conv'
 #    pooling_type = 'mean'
 #    pooling_type = 'max'
     pooling_type = 'attention'
-    
-#    w2v_fn = 'w2v/enwiki.w2v'
-    w2v_fn = None
-    save_fn = 'model-res/%s-%s-%s.ckpt' % (nn_type, pooling_type, use_hie)
     
     # Load Word2Vec 
     if w2v_fn is None:
@@ -44,41 +48,42 @@ if __name__ == '__main__':
         if not os.path.exists(w2v_fn):
             raise Exception('Word2Vec model does NOT exist!', w2v_fn)
         gensim_w2v = Word2Vec.load(w2v_fn)
-        pre_embedding = init_embedding(gensim_w2v, corpus.dic)
+        pre_embedding = init_embedding(gensim_w2v, corpus.current_dic)
         
-    # Define Model
-    if nn_type == 'conv':
-        nn_kwargs = {'num_layers': 1, 'conv_size': 5}
-    else:
-        nn_kwargs = {'num_layers': 1, 'bidirectional': True}
-    if pooling_type == 'attention':
-        pooling_kwargs = {'hidden_dim': n_hidden, 'atten_dim': n_hidden}
-    else:
-        pooling_kwargs = {}    
-    layer_info = {'nn_type': nn_type, 
-                  'nn_kwargs': nn_kwargs, 
-                  'dropout_p': 0.5, 
-                  'pooling_type': pooling_type, 
-                  'pooling_kwargs': pooling_kwargs}
-    
-    if use_hie:
-        classifier = HieNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
-                                     word2sent_info=layer_info, sent2doc_info=layer_info, state_pass=False)
-    else:
-        classifier = FlatNNClassifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, pre_embedding=pre_embedding, 
-                                      word2doc_info=layer_info)
+    classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
+                                      pre_embedding=pre_embedding, use_hie=use_hie, 
+                                      nn_type=nn_type, pooling_type=pooling_type)
+#    classifier.load_state_dict(torch.load('model-res/model-gru-attention-False-Adadelta-1.0000-v1.ckpt'))
     classifier.to(device)
     
     # Loss and Optimizer
     loss_func = nn.NLLLoss()
-    optimizer = optim.Adamax(classifier.parameters(), lr=0.001, weight_decay=1e-8)
-#    optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
+    # It seems that Adadelta is better than Adagrad and Adam...
     
-    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['dev']))
-    test_batches = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['test']))
+#    optim_type = 'SGD'
+    optim_type = 'Adadelta'
+    lr = 1.0
+    if optim_type == 'SGD':
+        optimizer = optim.SGD(classifier.parameters(), lr=lr, momentum=0.9, weight_decay=1e-8)
+    elif optim_type == 'Adadelta':
+        optimizer = optim.Adadelta(classifier.parameters(), lr=lr, rho=0.95, weight_decay=1e-8)
+    else:
+        raise Exception('Invalid optimizer!', optim_type)
+    
+
+#    optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
+#    optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-8)
+#    optimizer = optim.Adamax(classifier.parameters(), lr=0.001, weight_decay=1e-8)
+    
+    save_fn = 'model-res/model-%s-%s-%s-%s-%.4f-v3.ckpt' % (nn_type, pooling_type, use_hie, optim_type, lr)
+    
+    
+    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, order='descending', from_parts=['dev']))
+    test_batches = list(corpus.iter_as_batches(batch_size=batch_size, order='descending', from_parts=['test']))
     
     # Train the model
-    patience = 2500
+#    patience = 2500
+    patience = 5000
     patience_increase = 2
     improvement_threshold = 0.995
     disp_freq = 20
@@ -97,7 +102,7 @@ if __name__ == '__main__':
     while (epoch < max_epoch) and (not done_looping):
         epoch += 1
         # Get new shuffled batches from training set. 
-        for batch in corpus.iter_as_batches(batch_size=batch_size, shuffle=True, from_parts=['train']):
+        for batch in corpus.iter_as_batches(batch_size=batch_size, order='shuffle', from_parts=['train']):
             uidx += 1
             train_loss = train_batch(classifier, batch, loss_func, optimizer)
             

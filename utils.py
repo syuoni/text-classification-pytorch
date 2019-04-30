@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 
@@ -19,7 +20,8 @@ def cast_to_tensor(batch, device):
     batch_x = [x + [0] * (maxlen-len(x)) for x in batch_x]
         
     batch_x = torch.tensor(batch_x, dtype=torch.int64, device=device)
-    batch_y = torch.tensor(batch_y, dtype=torch.int64, device=device)
+    if batch_y is not None:
+        batch_y = torch.tensor(batch_y, dtype=torch.int64, device=device)
     batch_lens = torch.tensor(batch_lens, dtype=torch.int64, device=device)
     return batch_x, batch_y, batch_lens
     
@@ -55,16 +57,26 @@ def norm_embedding_(emb_layer):
     
 def init_embedding(gensim_w2v, dic):
     '''Return: tensor (float32)
-    '''
-    emb_values = np.random.uniform(-1, 1, (dic.size, gensim_w2v.vector_size)).astype(np.float32)
-    n_sub = 0
-    for idx, word in dic._idx2word.items():
-        if word in gensim_w2v.wv:
-            emb_values[idx] = gensim_w2v.wv[word]
-            n_sub += 1
-    print('Substituted words by word2vec: %d/%d' % (n_sub, dic.size))
     
-    emb = torch.from_numpy(emb_values)
+    Updated: 20190430
+    '''
+    if not isinstance(gensim_w2v, tuple):
+        vectors = gensim_w2v.wv.vectors
+        index = gensim_w2v.wv.index2word
+    else:
+        vectors, word_sr = gensim_w2v
+        index = word_sr.tolist()
+        
+    assert vectors.dtype == np.float32
+    gensim_vecs = pd.DataFrame(vectors, index=index)
+    new_index = [dic._idx2word[i] for i in range(dic.size)]
+    gensim_vecs = gensim_vecs.reindex(new_index)
+    
+    sup_locs = gensim_vecs.iloc[:, 0].isna()
+    gensim_vecs.loc[sup_locs] = np.random.uniform(-1, 1, (sup_locs.sum(), vectors.shape[1])).astype(np.float32)
+    print('Substituted words by word2vec: %d/%d' % (dic.size - sup_locs.sum(), dic.size))
+    
+    emb = torch.from_numpy(gensim_vecs.values)
     emb.div_(emb.norm(2, dim=1, keepdim=True))
     return emb
     

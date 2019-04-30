@@ -113,6 +113,7 @@ class Corpus(object):
         self._add_part('part_default')
         self.set_current_part(part='part_default')
         
+        
     def set_current_part(self, part='part_default'):
         if isinstance(part, (str, int)):
             if isinstance(part, str):
@@ -178,28 +179,34 @@ class Corpus(object):
         return (this_x, this_y, this_lens)
     
         
-    def iter_as_batches(self, batch_size=64, shuffle=True, from_parts=None, 
-                        return_type='seq'):
+    def iter_as_batches(self, batch_size=64, order='shuffle', from_parts=None, 
+                        input_df=None, return_type='seq'):
         '''
         return_type = 'seq' / 'sequence': word-index sequence
                     = 'bow': bag-of-words
+        input_df must be a DataFrame with columns 'w_seq' and 'w_seq_len'
         '''
-        if from_parts is None:
-            from_parts = ['train']
-            
-        this_df = self.df.loc[self.df[self.current_part_col].isin(from_parts)]
-        if shuffle is True:
-            this_df = this_df.sample(frac=1)
+        if input_df is not None:
+            this_df = input_df
         else:
-            # If NOT shuffle, use descending order by default
+            if from_parts is None:
+                from_parts = ['train']
+            this_df = self.df.loc[self.df[self.current_part_col].isin(from_parts)]
+            
+        if order == 'shuffle':
+            this_df = this_df.sample(frac=1)
+        elif order == 'descending':
+            # Most efficient computation
             this_df = this_df.sort_values(by='w_seq_len', ascending=False)
+            
             
         n_sample = this_df.shape[0]
         n_batch = n_sample // batch_size
         if n_sample % batch_size > 0:
             n_batch += 1
         
-        for batch_idx in range(1, n_batch):
+        # Note (20190430): Originally written as range(1, n_batch), why?
+        for batch_idx in range(n_batch):
             batch = this_df.iloc[batch_idx*batch_size:(batch_idx+1)*batch_size]
             
             if return_type.startswith('seq'):
@@ -208,8 +215,11 @@ class Corpus(object):
                 batch_x = [self.current_dic.word_seq2bow(w_seq) for w_seq in batch['w_seq'].tolist()]
             else:
                 raise Exception('Invalid return type!', return_type)
-                
-            batch_y = batch['rating'].tolist()
+            
+            if 'rating' in batch.columns:
+                batch_y = batch['rating'].tolist()
+            else:
+                batch_y = None
             batch_lens = batch['w_seq_len'].tolist()
             
 #            maxlen = max(batch_lens)
