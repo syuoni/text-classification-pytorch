@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pickle, gzip
 
-maxlen = 200
+maxlen = 600
 
 # dic info
 with gzip.open('dataset/theano/imdb.dict.pkl.gz', 'rb') as f:

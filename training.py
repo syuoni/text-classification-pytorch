@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-import os
 import time
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -32,6 +33,9 @@ def train_batches(classifier, batches, loss_func, optimizer):
     
 
 def eval_batches(classifier, batches):
+    '''Accept VotingClassifier, but need to ensure the batches are consistent to
+    all sub-classifiers. 
+    '''
     classifier.eval()
     with torch.no_grad():
         n_sample = 0
@@ -44,6 +48,66 @@ def eval_batches(classifier, batches):
     classifier.train()
     return n_error / n_sample
     
+
+def eval_corpus(classifier, corpus, batch_size=32):
+    
+    pass
+
+
+
+def train_corpus(classifier, corpus, loss_func, optimizer, save_fn, 
+                 batch_size=32, patience=5000, valid_freq=100, disp_freq=20):
+    # Fixed development batches
+    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, order='descending', from_parts=['dev']))
+    
+    # Additional configuration
+    patience_increase = 2
+    improvement_threshold = 0.995
+    
+    # Initial validation
+    best_iter = 0
+    best_valid_err = eval_batches(classifier, dev_batches)
+    print('Initial validation error %f %%' % (best_valid_err*100))
+    torch.save(classifier.state_dict(), save_fn)
+    
+    # Train the model
+    max_epoch = 500
+    epoch = 0
+    uidx = 0
+    done_looping = False
+    start_time = time.time()
+    
+    while (epoch < max_epoch) and (not done_looping):
+        epoch += 1
+        # Get new shuffled batches from training set
+        for batch in corpus.iter_as_batches(batch_size=batch_size, order='shuffle', from_parts=['train']):
+            uidx += 1
+            train_loss = train_batch(classifier, batch, loss_func, optimizer)
+            
+            # DO NOT display if disp_freq is None
+            if disp_freq is not None and uidx % disp_freq == 0:
+                print('Epoch %i, minibatch %i, train loss %f' % (epoch, uidx, train_loss))
+    
+            if uidx % valid_freq == 0:
+                this_valid_err = eval_batches(classifier, dev_batches)
+                print('Epoch %i, minibatch %i, validation error %f %%' % (epoch, uidx, this_valid_err*100))
+                
+                if this_valid_err < best_valid_err:
+                    if this_valid_err < best_valid_err*improvement_threshold:
+                        patience = max(patience, uidx*patience_increase)
+                        
+                    best_valid_err = this_valid_err
+                    best_iter = uidx
+                    torch.save(classifier.state_dict(), save_fn)
+                    
+            if patience < uidx:
+                done_looping = True
+                break
+        
+    end_time = time.time()
+    print('Optimization complete with best validation score of %f %%, at iter %d' % (best_valid_err * 100, best_iter))
+    print('The code run for %d epochs, with %f epochs/sec' % (epoch, 1. * epoch / (end_time - start_time)))
+
 
 def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32, 
                          use_hie=False, nn_type='gru', pooling_type='attention', 
@@ -69,9 +133,12 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
         pre_embedding = None
     else:
         print('Loading word2vec model...')
-        if not os.path.exists(w2v_fn):
-            raise Exception('Word2Vec model does NOT exist!', w2v_fn)
-        gensim_w2v = Word2Vec.load(w2v_fn)
+        if w2v_fn == 'tencent':
+            vectors = np.load(r'G:\word2vec\Tencent-AI-Lab\tencent-ailab-vecs-128.npy')
+            word_sr = pd.read_hdf(r'G:\word2vec\Tencent-AI-Lab\tencent-ailab-voc.h5', 'voc')
+            gensim_w2v = (vectors, word_sr)
+        else:
+            gensim_w2v = Word2Vec.load(w2v_fn)
         pre_embedding = init_embedding(gensim_w2v, corpus.current_dic)
         
     classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
@@ -81,57 +148,22 @@ def train_with_earlystop(corpus, device, n_hidden=128, n_emb=128, batch_size=32,
     
     # Loss and Optimizer
     loss_func = nn.NLLLoss()
-#    optimizer = optim.Adam(classifier.parameters(), lr=0.001, weight_decay=1e-8)
-    optimizer = optim.Adagrad(classifier.parameters(), lr=0.01, weight_decay=1e-8)
+    adadelta_optimizer = optim.Adadelta(classifier.parameters(), lr=1.0, rho=0.9, weight_decay=1e-8)
+    sgd_optimizer = optim.SGD(classifier.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-8)
     
-    dev_batches  = list(corpus.iter_as_batches(batch_size=batch_size, shuffle=False, from_parts=['dev']))
+    # First step: optimize using Adadelta
+    disp_freq = 20 if disp_proc is True else None
+    train_corpus(classifier, corpus, loss_func, adadelta_optimizer, save_fn, 
+                 disp_freq=disp_freq, batch_size=batch_size)
     
-    # Train the model
-    patience = 5000
-    patience_increase = 2
-    improvement_threshold = 0.995
-    disp_freq = 20
-    validation_freq = 100
+    # Retrieve the state optimized by Adadelta
+    classifier.load_state_dict(torch.load(save_fn))
+    # Second step: optimize using SGD
+    train_corpus(classifier, corpus, loss_func, sgd_optimizer, save_fn, 
+                 disp_freq=disp_freq, batch_size=batch_size)
     
-    max_epoch = 500
-    best_iter = 0
-    best_validation_err = 1.0
     
-    epoch = 0
-    uidx = 0
-    done_looping = False
-    start_time = time.time()
     
-    while (epoch < max_epoch) and (not done_looping):
-        epoch += 1
-        # Get new shuffled batches from training set. 
-        for batch in corpus.iter_as_batches(batch_size=batch_size, shuffle=True, from_parts=['train']):
-            uidx += 1
-            train_loss = train_batch(classifier, batch, loss_func, optimizer)
-            
-            if uidx % disp_freq == 0 and disp_proc:
-                print('epoch %i, minibatch %i, train loss %f' % (epoch, uidx, train_loss))
     
-            if uidx % validation_freq == 0:
-                this_validation_err = eval_batches(classifier, dev_batches)
-                print('epoch %i, minibatch %i, validation error %f %%' % (epoch, uidx, this_validation_err*100))
-                
-                if this_validation_err < best_validation_err:
-                    if this_validation_err < best_validation_err*improvement_threshold:
-                        patience = max(patience, uidx*patience_increase)
-                        
-                    best_validation_err = this_validation_err
-                    best_iter = uidx
-                    
-                    torch.save(classifier.state_dict(), save_fn)
-                    # classifier.load_state_dict(torch.load(save_fn))
-                    
-            if patience < uidx:
-                done_looping = True
-                break
-        
-    end_time = time.time()
-    print('Optimization complete with best validation score of %f %%, at iter %d' % (best_validation_err * 100, best_iter))
-    print('The code run for %d epochs, with %f epochs/sec' % (epoch, 1. * epoch / (end_time - start_time)))
     
     

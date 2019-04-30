@@ -218,7 +218,7 @@ class HieLayer(nn.Module):
         self.dropout_layer = dropout_layer
         self.pooling_layer = pooling_layer
             
-    def forward(self, hie_ins, batch_x):
+    def forward(self, hie_ins, batch_x, save_memory=True):
         '''
         Input:
             hie_ins: tensor (float32) of shape (batch, step, emb/hidden)
@@ -227,106 +227,76 @@ class HieLayer(nn.Module):
             doc_list: tensor (float32) of shape (batch, sent_step_in_doc, hidden)
             doc_lens: tensor (int64) of shape (batch, )
         '''
-        # TODO: Make each doc as a batch fed into nn_layer, to save memory...
         device = batch_x.device
         doc_lens = []  # Number of sentences in documents
-        sent_lens = [] # Number of words in sentence
-        sent_list = [] 
+        doc_list = []
         
-        for batch_idx in range(batch_x.size(0)):
-            cuts = torch.arange(batch_x.size(1), dtype=torch.int64, device=device)[batch_x[batch_idx]==1] + 1
-            cuts = cuts.cpu().numpy().tolist()
-            doc_lens.append(len(cuts))
+        if save_memory:
+            # Make each doc as a batch fed into nn_layer, to save memory...
+            for batch_idx in range(batch_x.size(0)):
+                cuts = torch.arange(batch_x.size(1), dtype=torch.int64, device=device)[batch_x[batch_idx]==1] + 1
+                cuts = cuts.cpu().numpy().tolist()
+                doc_lens.append(len(cuts))
+                
+                # All the sentences in each document
+                sent_lens = [] # Number of words in sentence
+                sent_list = [] 
+                for cut0, cut1 in zip([0] + cuts, cuts):
+                    sent_list.append(hie_ins[batch_idx, cut0:cut1])
+                    sent_lens.append(cut1 - cut0)
+                    
+                sent_maxlen = max(sent_lens)
+                
+                # sent_list: tensor (float32) of shape (n_sent, word_step_in_sent, emb/hidden)
+                sent_list = [F.pad(sent, (0, 0, 0, sent_maxlen-sent_len)) for sent, sent_len in zip(sent_list, sent_lens)]
+                sent_list = torch.stack(sent_list)
+                
+                # sent_list: tensor (float32) of shape (n_sent, word_step_in_sent, hidden)
+                if self.nn_layer is not None:
+                    sent_list = self.nn_layer(sent_list, torch.tensor(sent_lens, dtype=torch.int64, device=device))
+                if self.dropout_layer is not None:
+                    sent_list = self.dropout_layer(sent_list)
+                
+                # sent_pooled: tensor (float32) of shape (n_sent, hidden)
+                sent_pooled = self.pooling_layer(sent_list, torch.tensor(sent_lens, dtype=torch.int64, device=device))
+                doc_list.append(sent_pooled)
+        else:
+            # All sentences in all documents of a batch
+            sent_lens = [] # Number of words in sentence
+            sent_list = [] 
+            for batch_idx in range(batch_x.size(0)):
+                cuts = torch.arange(batch_x.size(1), dtype=torch.int64, device=device)[batch_x[batch_idx]==1] + 1
+                cuts = cuts.cpu().numpy().tolist()
+                doc_lens.append(len(cuts))
+                
+                for cut0, cut1 in zip([0] + cuts, cuts):
+                    sent_list.append(hie_ins[batch_idx, cut0:cut1])
+                    sent_lens.append(cut1 - cut0)
             
-            for cut0, cut1 in zip([0] + cuts, cuts):
-                sent_list.append(hie_ins[batch_idx, cut0:cut1])
-                sent_lens.append(cut1 - cut0)
-        
+            sent_maxlen = max(sent_lens)
+            
+            # sent_list: tensor (float32) of shape (n_sent, word_step_in_sent, emb/hidden)
+            sent_list = [F.pad(sent, (0, 0, 0, sent_maxlen-sent_len)) for sent, sent_len in zip(sent_list, sent_lens)]
+            sent_list = torch.stack(sent_list)
+            
+            # sent_list: tensor (float32) of shape (n_sent, word_step_in_sent, hidden)
+            if self.nn_layer is not None:
+                sent_list = self.nn_layer(sent_list, torch.tensor(sent_lens, dtype=torch.int64, device=device))
+            if self.dropout_layer is not None:
+                sent_list = self.dropout_layer(sent_list)
+            
+            # sent_pooled: tensor (float32) of shape (n_sent, hidden)
+            sent_pooled = self.pooling_layer(sent_list, torch.tensor(sent_lens, dtype=torch.int64, device=device))
+            
+            # doc_list: tensor (float32) of shape (batch, sent_step_in_doc, hidden)
+            doc_cuts = np.cumsum(doc_lens).tolist()
+            doc_list = [sent_pooled[cut0:cut1] for cut0, cut1 in zip([0] + doc_cuts, doc_cuts)]
+            
         doc_maxlen = max(doc_lens)
-        sent_maxlen = max(sent_lens)
-        
-        # sent_list: tensor (float32) of shape (n_sent, word_step_in_sent, emb/hidden)
-        sent_list = [F.pad(sent, (0, 0, 0, sent_maxlen-sent_len)) for sent, sent_len in zip(sent_list, sent_lens)]
-        sent_list = torch.stack(sent_list)
-        
-        # sent_list: tensor (float32) of shape (n_sent, word_step_in_sent, hidden)
-        if self.nn_layer is not None:
-            sent_list = self.nn_layer(sent_list, torch.tensor(sent_lens, dtype=torch.int64, device=device))
-        if self.dropout_layer is not None:
-            sent_list = self.dropout_layer(sent_list)
-        
-        # sent_pooled: tensor (float32) of shape (n_sent, hidden)
-        sent_pooled = self.pooling_layer(sent_list, torch.tensor(sent_lens, dtype=torch.int64, device=device))
-        
-        # doc_list: tensor (float32) of shape (batch, sent_step_in_doc, hidden)
-        doc_cuts = np.cumsum(doc_lens).tolist()
-        doc_list = [sent_pooled[cut0:cut1] for cut0, cut1 in zip([0] + doc_cuts, doc_cuts)]
         doc_list = [F.pad(doc, (0, 0, 0, doc_maxlen-doc_len)) for doc, doc_len in zip(doc_list, doc_lens)]
         doc_list = torch.stack(doc_list)
         
         return doc_list, torch.tensor(doc_lens, dtype=torch.int64, device=device)
-        
-#        interm_hidden_list = []
-#        interm_batch_lens = []        
-#        for batch_idx in range(batch_x.size(0)):  
-#            cuts = torch.arange(batch_x.size(1), dtype=torch.int64, device=batch_x.device)[batch_x[batch_idx]==1] + 1
-#            
-#            sub_pooled_outs_list = []
-#            for cut_idx in range(cuts.size(0)):
-#                cut0 = 0 if cut_idx == 0 else cuts[cut_idx-1]
-##                print(batch_x[batch_idx, cut0:cuts[cut_idx]][-1])
-#                
-#                # sub_outs: tensor (float32) of shape (sub_step, hidden)
-#                sub_outs = nn_outs[batch_idx, cut0:cuts[cut_idx]]
-#                # sub_pooled_outs: tensor (float32) of shape (1, hidden)
-#                sub_pooled_outs = self.pooling(sub_outs.unsqueeze(0), 
-#                                               torch.tensor([sub_outs.size(0)], device=batch_x.device))
-#                sub_pooled_outs_list.append(sub_pooled_outs)
-#                
-##            import pdb; pdb.set_trace()
-#            interm_hidden = torch.cat(sub_pooled_outs_list)
-#            interm_hidden_list.append(interm_hidden)
-#            interm_batch_lens.append(interm_hidden.size(0))
-#            
-#        maxlen = max(interm_batch_lens)
-#        interm_hidden_list = [F.pad(interm_hidden_list[i], (0, 0, 0, maxlen-interm_batch_lens[i])) for i in range(batch_x.size(0))]
-#        
-##        for x in interm_hidden_list:
-##            print(x.size())
-#        
-#        return torch.stack(interm_hidden_list), torch.tensor(interm_batch_lens, device=batch_x.device)
-        
     
-class VotingClassifier(object):
-    def __init__(self, sub_classifiers):
-        self.classifiers = sub_classifiers
-        self.n_classifiers = len(sub_classifiers)
-        self.device = sub_classifiers[0].device
-        
-    def predict(self, batch_x, batch_lens, with_prob=False):
-        cat_scores = self.decision_func(batch_x, batch_lens)
-        pred_prob, predicted = cat_scores.max(dim=1)
-        if with_prob:
-            return (predicted, pred_prob)
-        else:
-            return predicted
     
-    def decision_func(self, batch_x, batch_lens):
-        # sub_res: (classifier_dim, batch_dim, target_dim)
-        sub_res = torch.stack([classifier.decision_func(batch_x, batch_lens) for classifier in self.classifiers])
-        return sub_res.mean(dim=0)
-        
-    def eval(self):
-        for classifier in self.classifiers:
-            classifier.eval()
-            
-    def train(self):
-        for classifier in self.classifiers:
-            classifier.train()
-        
-    def to(self, device):
-        for classifier in self.classifiers:
-            classifier.to(device)
-        self.device = device
-        
-        
+    
