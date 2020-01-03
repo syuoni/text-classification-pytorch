@@ -17,7 +17,7 @@ if __name__ == '__main__':
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
-    use_hie = True
+    use_hie = False
     w2v_fn = 'w2v/enwiki.w2v'
 #    w2v_fn = None
     
@@ -45,8 +45,8 @@ if __name__ == '__main__':
 #    train_with_validation(train_set, valid_set, use_w2v=False)
     
 #============================ Cross Validation ===============================#
-#    for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
-    for nn_type, pooling_type in itertools.product(['gru'], ['attention']):
+    for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
+#    for nn_type, pooling_type in itertools.product(['gru'], ['attention']):
         print(nn_type, pooling_type)
         
         for cv_idx in range(5):
@@ -54,7 +54,8 @@ if __name__ == '__main__':
             corpus.set_current_part(cv_idx)
             
             save_fn = '%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx)
-            
+            if os.path.exists(save_fn):
+                continue
             train_with_earlystop(corpus, device, n_hidden=n_hidden, n_emb=n_emb, batch_size=batch_size, 
                                  use_hie=use_hie, nn_type=nn_type, pooling_type=pooling_type, 
                                  w2v_fn=w2v_fn, save_fn=save_fn, disp_proc=False)

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import os
+import itertools
 import pickle
 import numpy as np
+import pandas as pd
 import torch
 
 from corpus import Corpus
@@ -18,18 +20,14 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 use_hie = False
 
 
-#dataset = 'imdb'
-dataset = 'yelp-2013'
+dataset = 'imdb'
+#dataset = 'yelp-2013'
 #dataset = 'yelp-2014'
-corpus = Corpus.load_from_file('dataset/%s-prep.pkl' % dataset)
 
-#dn = 'model-res-%s' % dataset
-#corpus_fn = '%s/corpus-%s-with-cv.pkl' % (dn, dataset)
-#with open(corpus_fn, 'rb') as f:
-#    corpus = pickle.load(f)
-
-#TODO: Align the dictionary/corpus for each train-test split...
-test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='descending', from_parts=['test']))
+dn = 'model-res-%s' % dataset
+corpus_fn = '%s/corpus-%s-with-cv.pkl' % (dn, dataset)
+with open(corpus_fn, 'rb') as f:
+    corpus = pickle.load(f)
 
 #=========================== Metrics Calculation =============================#
 '''
@@ -73,52 +71,39 @@ Adadelta, 1.0: 0.6342
 '''
 #=============================================================================#
 
+ave_accs = []
+for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
+    #nn_type, pooling_type = 'gru', 'attention'
+    
+    cv_accs = []
+    for cv_idx in range(5):
+        # Align the dictionary/corpus for each train-test split
+        print('Dev fold: %d' % cv_idx)
+        corpus.set_current_part(cv_idx)
+        
+        save_fn = '%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx)
+        classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
+                                          pre_embedding=None, use_hie=use_hie, 
+                                          nn_type=nn_type, pooling_type=pooling_type)
+        classifier.load_state_dict(torch.load(save_fn))
+        classifier.to(device)
+                    
+        test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='descending', from_parts=['test']))
+        test_err = eval_batches(classifier, test_batches)
+        cv_accs.append(1 - test_err)
+        
+    ave_accs.append([nn_type, pooling_type, sum(cv_accs) / 5])
+
+ave_acc_df = pd.DataFrame(ave_accs, columns=['nn_type', 'pooling_type', 'acc'])
 
 
-nn_type = 'gru'
-#nn_type = 'lstm'
-#nn_type = 'conv'
-#pooling_type = 'mean'
-#pooling_type = 'max'
-pooling_type = 'attention'
-
-optim_type = 'SGD'
-optim_type = 'Adadelta'
-lr = 1.0
-
-save_fn = 'model-res/model-%s-%s-%s-%s-%.4f-v3.ckpt' % (nn_type, pooling_type, use_hie, optim_type, lr)
-classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
-                                  pre_embedding=None, use_hie=use_hie, 
-                                  nn_type=nn_type, pooling_type=pooling_type)
-classifier.load_state_dict(torch.load(save_fn))
-classifier.to(device)
-
-#classifier_list = []
-#for cv_idx in range(5):
-#    print('Dev fold: %d' % cv_idx)
-#    corpus.set_current_part(cv_idx)
-#    
-#    save_fn = '%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx)
-#    
-#    classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
-#                                      pre_embedding=None, use_hie=use_hie, 
-#                                      nn_type=nn_type, pooling_type=pooling_type)
-#    classifier.load_state_dict(torch.load(save_fn))
-#    classifier_list.append(classifier)
-#    
-#vc = VotingClassifier(classifier_list)
-##vc.eval()
-#vc.to(device)
-
-test_err = eval_batches(classifier, test_batches)
-print('Accuracy: %.4f' % (1 - test_err))
-
-df = corpus.df[['w_seq', 'w_seq_len']]
-all_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='original', input_df=df))
-#all_err = eval_batches(classifier, all_batches)
-
-predictor = Predictor(classifier, corpus)
-x = predictor.decision_func_on_w_seq_df(df)
+#
+#df = corpus.df[['w_seq', 'w_seq_len']]
+#all_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='original', input_df=df))
+##all_err = eval_batches(classifier, all_batches)
+#
+#predictor = Predictor(classifier, corpus)
+#x = predictor.decision_func_on_w_seq_df(df)
 
 
 #for test_k in range(5):
