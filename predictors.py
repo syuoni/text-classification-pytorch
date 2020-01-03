@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import pandas as pd
 import torch
 import pickle
 
@@ -10,8 +11,9 @@ from models import FlatNNClassifier, HieNNClassifier
 
 
 class Predictor(object):
-    '''A conbination of a classifier and a corpus, 
-    which aims to predict (batch of) w_seq directly. 
+    '''A conbination of a classifier and a corpus, which aims to predict 
+    (batch of) w_seq directly. 
+    WARNING: Must make sure the classifier and corpus are MATCHED!
     '''
     def __init__(self, classifier, corpus):
         self.classifier = classifier
@@ -46,10 +48,17 @@ class Predictor(object):
             return predicted
         
     def decision_func_on_w_seq(self, w_seq):
-        pass
+        w_seq_df = pd.DataFrame({'w_seq': [w_seq]})
+        w_seq_df['w_seq_len'] = w_seq_df['w_seq'].str.len()
+        return self.decision_func_on_w_seq_df(w_seq_df, batch_size=1).flatten()
     
-    def predict_on_w_seq(self, w_seq):
-        pass
+    def predict_on_w_seq(self, w_seq, with_prob=False):
+        prob_distr = self.decision_func_on_w_seq(w_seq)
+        pred_prob, predicted = prob_distr.max(dim=0)
+        if with_prob:
+            return (predicted, pred_prob)
+        else:
+            return predicted
     
         
 #        if self.voting == 'hard':
