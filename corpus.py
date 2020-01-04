@@ -242,6 +242,9 @@ class Corpus(object):
     
     @staticmethod
     def load_from_file(fn):
+        '''Load prepared data and construct a Corpus object. 
+        Use pickle to save/load an existing Corpus object. 
+        '''
         with open(fn, 'rb') as f:
             df = pickle.load(f)
             pat2word = pickle.load(f)

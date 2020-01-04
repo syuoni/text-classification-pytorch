@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-import numpy as np
 import pandas as pd
 import torch
-import pickle
+import torch.nn as nn
 
 from corpus import Corpus
 from utils import cast_to_tensor
@@ -61,34 +60,35 @@ class Predictor(object):
             return predicted
     
         
-#        if self.voting == 'hard':
-#            # sub_res -> (estimator_dim, )
-#            sub_res = np.array([estimator.predict_sent(sent) for estimator in self.estimators], 
-#                               dtype=np.float32)
-#            mode_res, count = mode(sub_res)
-#            return (mode_res[0], count[0]/self.n_estimators) if with_prob else mode_res[0]
-#        else:
-#            # sub_res -> (estimator_dim, target_dim)
-#            sub_res = np.array([estimator.predict_sent(sent, with_prob=True) for estimator in self.estimators], 
-#                               dtype=np.float32)
-#            sub_res = sub_res.mean(axis=0)
-#            max_res = np.argmax(sub_res)
-#            mean_prob = sub_res[max_res]
-#            return (max_res, mean_prob) if with_prob else max_res
-    
-#    def predict(self, batch_x, batch_lens, with_prob=False):
-#        cat_scores = self.decision_func(batch_x, batch_lens)
-#        pred_prob, predicted = cat_scores.max(dim=1)
-#        if with_prob:
-#            return (predicted, pred_prob)
-#        else:
-#            return predicted
-#    
-#    def decision_func(self, batch_x, batch_lens):
-#        # sub_res: (classifier_dim, batch_dim, target_dim)
-#        sub_res = torch.stack([classifier.decision_func(batch_x, batch_lens) for classifier in self.classifiers])
-#        return sub_res.mean(dim=0)
+class CVVotingPredictor(Predictor):
+    '''A voting predictor constrcted from classifiers of a cross-validation. 
+    WARNING: Must make sure the classifiers (loaded from classifier_paths) and corpus
+    (by cv partitions) are MATCHED on by one! 
+    '''
+    def __init__(self, classifier, classifier_state_paths, corpus):
+        self.classifier = classifier
+        self.classifier_state_paths = classifier_state_paths
+        self.corpus = corpus
         
+    def decision_func_on_w_seq_df(self, w_seq_df, batch_size=128):
+        '''Use soft-voting
+        '''
+        prob_distr = 0
+        for cv_idx, state_fn in enumerate(self.classifier_state_paths):
+            print("Processing CV %d/%d..." % (cv_idx, len(self.classifier_state_paths)))
+            self.corpus.set_current_part(cv_idx)
+            
+            # Resize the embeddings to match the current voc size
+            self.classifier.voc_size = self.corpus.current_dic.size
+            self.classifier.emb = nn.Embedding(self.classifier.voc_size, self.classifier.emb_dim)
+            
+            self.classifier.load_state_dict(torch.load(state_fn, map_location=None if torch.cuda.is_available() else 'cpu'))
+            
+            this_predictor = Predictor(self.classifier, self.corpus)
+            prob_distr += this_predictor.decision_func_on_w_seq_df(w_seq_df, batch_size=batch_size)
+            
+        prob_distr = prob_distr / len(self.classifier_state_paths)
+        return prob_distr
     
 
 

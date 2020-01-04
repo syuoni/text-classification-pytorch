@@ -10,7 +10,7 @@ from corpus import Corpus
 from models import construct_classifier
 from models import FlatNNClassifier, HieNNClassifier
 from training import eval_batches
-from predictors import Predictor
+from predictors import Predictor, CVVotingPredictor
 
 n_hidden = 128
 n_emb = 128
@@ -71,31 +71,57 @@ Adadelta, 1.0: 0.6342
 '''
 #=============================================================================#
 
-ave_accs = []
+# This is average out-of-sample accuracies. 
+## Construct a voting predictor???
+#ave_accs = []
+#for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
+#    #nn_type, pooling_type = 'gru', 'attention'
+#    print(nn_type, pooling_type)
+#
+#    cv_accs = []
+#    for cv_idx in range(5):
+#        # Align the dictionary/corpus for each train-test split
+#        print('Dev fold: %d' % cv_idx)
+#        corpus.set_current_part(cv_idx)
+#        
+#        save_fn = '%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx)
+#        classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
+#                                          pre_embedding=None, use_hie=use_hie, 
+#                                          nn_type=nn_type, pooling_type=pooling_type)
+#        classifier.load_state_dict(torch.load(save_fn))
+#        classifier.to(device)
+#        
+#        # The test part is the same as that in the default partition. 
+#        test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='descending', from_parts=['test']))
+#        test_err = eval_batches(classifier, test_batches)
+#        cv_accs.append(1 - test_err)
+#        
+#    ave_accs.append([nn_type, pooling_type, sum(cv_accs) / 5])
+#
+#ave_acc_df = pd.DataFrame(ave_accs, columns=['nn_type', 'pooling_type', 'acc'])
+#ave_acc_df.to_excel('ave-acc.xlsx', 'acc')
+
+
+
+test_df = corpus.df.loc[corpus.df['part_default']=='test'].copy()
+voting_accs = []
 for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
     #nn_type, pooling_type = 'gru', 'attention'
+    print(nn_type, pooling_type)
     
-    cv_accs = []
-    for cv_idx in range(5):
-        # Align the dictionary/corpus for each train-test split
-        print('Dev fold: %d' % cv_idx)
-        corpus.set_current_part(cv_idx)
-        
-        save_fn = '%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx)
-        classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
-                                          pre_embedding=None, use_hie=use_hie, 
-                                          nn_type=nn_type, pooling_type=pooling_type)
-        classifier.load_state_dict(torch.load(save_fn))
-        classifier.to(device)
-        
-        # The test part is the same as that in the default partition. 
-        test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='descending', from_parts=['test']))
-        test_err = eval_batches(classifier, test_batches)
-        cv_accs.append(1 - test_err)
-        
-    ave_accs.append([nn_type, pooling_type, sum(cv_accs) / 5])
-
-ave_acc_df = pd.DataFrame(ave_accs, columns=['nn_type', 'pooling_type', 'acc'])
+    classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
+                                      pre_embedding=None, use_hie=use_hie, 
+                                      nn_type=nn_type, pooling_type=pooling_type)
+    
+    classifier_state_paths = ['%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx) for cv_idx in range(5)]
+    cvv_predictor = CVVotingPredictor(classifier, classifier_state_paths, corpus)
+    
+    y_pred = cvv_predictor.predict_on_w_seq_df(test_df)
+    test_acc = (test_df['rating'].values == y_pred.cpu().numpy()).mean()
+    voting_accs.append([nn_type, pooling_type, test_acc])
+    
+voting_acc_df = pd.DataFrame(voting_accs, columns=['nn_type', 'pooling_type', 'acc'])
+voting_acc_df.to_excel('voting-acc.xlsx', 'acc')
 
 
 #
