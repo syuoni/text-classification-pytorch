@@ -87,7 +87,8 @@ for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean',
                                           nn_type=nn_type, pooling_type=pooling_type)
         classifier.load_state_dict(torch.load(save_fn))
         classifier.to(device)
-                    
+        
+        # The test part is the same as that in the default partition. 
         test_batches = list(corpus.iter_as_batches(batch_size=batch_size*5, order='descending', from_parts=['test']))
         test_err = eval_batches(classifier, test_batches)
         cv_accs.append(1 - test_err)

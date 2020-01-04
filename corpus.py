@@ -144,7 +144,8 @@ class Corpus(object):
         
         
     def create_cv(self, n_splits=5):
-        '''Re-split train and dev sets as cross validation
+        '''Re-split train and dev sets as cross validation. 
+        The test set, if existing, remains as the default partition. 
         '''
         train_dev_idxs = self.df.index[self.df['part_default'].isin(['train', 'dev'])].values
         cv = KFold(n_splits=n_splits, shuffle=True)
