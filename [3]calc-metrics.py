@@ -112,6 +112,7 @@ for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean',
     classifier = construct_classifier(corpus.current_dic.size, n_emb, n_hidden, corpus.n_target, 
                                       pre_embedding=None, use_hie=use_hie, 
                                       nn_type=nn_type, pooling_type=pooling_type)
+    classifier.to(device)
     
     classifier_state_paths = ['%s/model-%s-%s-%s-%d.ckpt' % (dn, nn_type, pooling_type, use_hie, cv_idx) for cv_idx in range(5)]
     cvv_predictor = CVVotingPredictor(classifier, classifier_state_paths, corpus)

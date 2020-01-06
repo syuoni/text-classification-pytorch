@@ -62,8 +62,8 @@ class Predictor(object):
         
 class CVVotingPredictor(Predictor):
     '''A voting predictor constrcted from classifiers of a cross-validation. 
-    WARNING: Must make sure the classifiers (loaded from classifier_paths) and corpus
-    (by cv partitions) are MATCHED on by one! 
+    WARNING: Must make sure the classifiers (loaded from classifier_state_paths) 
+    and corpus (by cv partitions) are MATCHED one by one! 
     '''
     def __init__(self, classifier, classifier_state_paths, corpus):
         self.classifier = classifier
