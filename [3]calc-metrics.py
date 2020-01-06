@@ -72,7 +72,6 @@ Adadelta, 1.0: 0.6342
 #=============================================================================#
 
 # This is average out-of-sample accuracies. 
-## Construct a voting predictor???
 #ave_accs = []
 #for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
 #    #nn_type, pooling_type = 'gru', 'attention'
@@ -103,6 +102,7 @@ Adadelta, 1.0: 0.6342
 
 
 
+# This is out-of-sample accuracies by a voting predictor constructed by CV classifiers
 test_df = corpus.df.loc[corpus.df['part_default']=='test'].copy()
 voting_accs = []
 for nn_type, pooling_type in itertools.product(['gru', 'lstm', 'conv'], ['mean', 'max', 'attention']):
