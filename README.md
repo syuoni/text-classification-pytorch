@@ -1,25 +1,46 @@
-# Text classification
+# Text Classification
 This project implements neural networks for text classification, based on PyTorch (0.4.0).  
 
 # Data 
 The original datasets are released by Tang et al. (2015). 
 
+# Configuration
+* Word Embedding Layer
+    * Layer Number: 1
+    * Dimension: 128
+    * Pre-Training: Word2Vec / Wiki
+* Hidden Layer
+    * Bidirectional (GRNN / LSTM): True
+    * Convolutional Size (CNN): 5
+    * Dimension: 128 (64 for each direction for GRNN / LSTM)
+* Mini-Batch Size: 32
+* Optimization Algorithm
+    * Adadelta: lr=1.0, rho=0.9
+    * SGD: lr=0.001, momentum=0.9
+* Performance Evaluation
+    * Leave out the Testing Set
+    * Five-Fold Cross Validation on the Training Set
+        * Four Folds as Training Set
+        * One Fold as Validation Set for Early-Stopping
+    * Combine the Five Classifiers by Soft-Voting 
+    * Predict on the Testing Set
+
 # Results  
-## Test accuracies
-|Model| Pooling |Hierarchical|IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
-|:---:|:-------:|:----------:|:-----:|:------:|:-------:|:-------:|
-|GRNN |Mean     |False       | 0.9121|  0.4691| | |
-|GRNN |Max      |False       | 0.9246|  0.4781| | |
-|GRNN |Attention|False       | 0.9259|  0.4855| | |
-|GRNN |Mean     |True        | 0.9121|  0.4691| | |
-|GRNN |Max      |True        | 0.9246|  0.4781| | |
-|GRNN |Attention|True        | 0.9259|  0.4855| | |
-|LSTM |Mean     |False       | 0.9068|  0.3855| | |
-|LSTM |Max      |False       | 0.9234|  0.4836| | |
-|LSTM |Attention|False       | 0.9233|  0.4813| | |
-|CNN  |Mean     |False       | 0.9077|  0.4011| | |
-|CNN  |Max      |False       | 0.9204|  0.4884| | |
-|CNN  |Attention|False       | 0.9198|  0.4795| | |
+## Testing Accuracies
+|Model| Pooling  |Hierarchical|IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
+|:---:|:--------:|:----------:|:-----:|:------:|:-------:|:-------:|
+|GRNN |Mean      |False|    |  0.4992  |**0.6483**|    |
+|GRNN |Max       |False|    |  0.5008  |**0.6483**|    |
+|GRNN |Attention |False|    |  0.5038  |  0.6423  |    |
+|LSTM |Mean      |False|    |  0.4789  |  0.6321  |    |
+|LSTM |Max       |False|    |  0.5021  |**0.6483**|    |
+|LSTM |Attention |False|    |**0.5042**|  0.6414  |    |
+|CNN  |Mean      |False|    |  0.4403  |  0.6191  |    |
+|CNN  |Max       |False|    |  0.4956  |  0.6333  |    |
+|CNN  |Attention |False|    |  0.4922  |  0.6303  |    |
+|GRNN |Mean      |True |    |  |  |  |
+|GRNN |Max       |True |    |  |  |  |
+|GRNN |Attention |True |    |  |  |  |
 
 
 # References

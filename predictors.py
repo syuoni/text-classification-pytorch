@@ -81,6 +81,7 @@ class CVVotingPredictor(Predictor):
             # Resize the embeddings to match the current voc size
             self.classifier.voc_size = self.corpus.current_dic.size
             self.classifier.emb = nn.Embedding(self.classifier.voc_size, self.classifier.emb_dim)
+            self.classifier.emb.to(self.classifier.device)
             
             self.classifier.load_state_dict(torch.load(state_fn, map_location=None if torch.cuda.is_available() else 'cpu'))
             
