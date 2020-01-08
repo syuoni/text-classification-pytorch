@@ -21,9 +21,10 @@ if __name__ == '__main__':
     w2v_fn = 'w2v/enwiki.w2v'
 #    w2v_fn = None
     
+#    dataset = 'imdb-2-200'
 #    dataset = 'imdb'
-    dataset = 'yelp-2013'
-#    dataset = 'yelp-2014'
+#    dataset = 'yelp-2013'
+    dataset = 'yelp-2014'
     dn = 'model-res-%s' % dataset
     if not os.path.exists(dn):
         os.makedirs(dn)

@@ -64,7 +64,7 @@ Adadelta, 1.0: 0.6342
 
 voting_acc_df = None
 
-for dataset in ['imdb', 'yelp-2013']:
+for dataset in ['imdb-2-200', 'imdb', 'yelp-2013']:
     #dataset = 'imdb'
     #dataset = 'yelp-2013'
     #dataset = 'yelp-2014'
@@ -143,7 +143,12 @@ for i in voting_acc_df.index:
                 'False'.ljust(5, " ")]
     
     for dataset in ['imdb-2-200', 'imdb', 'yelp-2013', 'yelp-2014']:
-        this_acc = "  %.4f  " % voting_acc_df.loc[i, dataset] if dataset in voting_acc_df.columns else "    "
+        if dataset not in voting_acc_df.columns:
+            this_acc = "    "
+        elif voting_acc_df.loc[i, dataset] == voting_acc_df[dataset].max():
+            this_acc = "**%.4f**" % voting_acc_df.loc[i, dataset]
+        else:
+            this_acc = "  %.4f  " % voting_acc_df.loc[i, dataset]
         this_row.append(this_acc)
         
     print("|".join(["", *this_row, ""]))
