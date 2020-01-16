@@ -64,7 +64,7 @@ Adadelta, 1.0: 0.6342
 
 voting_acc_df = None
 
-for dataset in ['imdb-2-200', 'imdb', 'yelp-2013']:
+for dataset in ['imdb-2-200', 'imdb', 'yelp-2013', 'yelp-2014']:
     #dataset = 'imdb'
     #dataset = 'yelp-2013'
     #dataset = 'yelp-2014'

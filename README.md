@@ -29,15 +29,15 @@ The original datasets are released by Tang et al. (2015).
 ## Testing Accuracies
 |Model| Pooling  |Hierarchical|IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
 |:---:|:--------:|:----------:|:-----:|:------:|:-------:|:-------:|
-|GRNN |Mean      |False|  0.9174  |  0.4992  |**0.6483**|    |
-|GRNN |Max       |False|**0.9212**|  0.5008  |**0.6483**|    |
-|GRNN |Attention |False|  0.9192  |  0.5038  |  0.6423  |    |
-|LSTM |Mean      |False|  0.9095  |  0.4789  |  0.6321  |    |
-|LSTM |Max       |False|  0.9172  |  0.5021  |**0.6483**|    |
-|LSTM |Attention |False|  0.9152  |**0.5042**|  0.6414  |    |
-|CNN  |Mean      |False|  0.9046  |  0.4403  |  0.6191  |    |
-|CNN  |Max       |False|  0.9163  |  0.4956  |  0.6333  |    |
-|CNN  |Attention |False|  0.9129  |  0.4922  |  0.6303  |    |
+|GRNN |Mean      |False|  0.9174  |  0.4992  |**0.6483**|  0.6448  |
+|GRNN |Max       |False|**0.9212**|  0.5008  |**0.6483**|  0.6495  |
+|GRNN |Attention |False|  0.9192  |  0.5038  |  0.6423  |**0.6501**|
+|LSTM |Mean      |False|  0.9095  |  0.4789  |  0.6321  |  0.6409  |
+|LSTM |Max       |False|  0.9172  |  0.5021  |**0.6483**|  0.6484  |
+|LSTM |Attention |False|  0.9152  |**0.5042**|  0.6414  |  0.6483  |
+|CNN  |Mean      |False|  0.9046  |  0.4403  |  0.6191  |  0.6216  |
+|CNN  |Max       |False|  0.9163  |  0.4956  |  0.6333  |  0.6333  |
+|CNN  |Attention |False|  0.9129  |  0.4922  |  0.6303  |  0.6310  |
 |GRNN |Mean      |True |    |    |    |    |
 |GRNN |Max       |True |    |    |    |    |
 |GRNN |Attention |True |    |    |    |    |
