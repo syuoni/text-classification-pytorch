@@ -22,11 +22,30 @@ The original datasets are released by Tang et al. (2015).
     * Five-Fold Cross Validation on the Training Set
         * Four Folds as Training Set
         * One Fold as Validation Set for Early-Stopping
-    * Combine the Five Classifiers by Soft-Voting 
     * Predict on the Testing Set
+        * Predict with Each of the Five Classifer, and Average the Accuracies
+        * Predict with a Classifier Combined by Soft-Voting over the Five Classifiers 
+
 
 # Results  
-## Testing Accuracies
+## Testing Accuracies by Independent Classifers
+|Model| Pooling  |Hierarchical|IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
+|:---:|:--------:|:----------:|:-----:|:------:|:-------:|:-------:|
+|GRNN |Mean      |False|  0.9056  |  0.4732  |  0.6289  |  0.6318  |
+|GRNN |Max       |False|  0.9067  |  0.4820  |**0.6296**|  0.6337  |
+|GRNN |Attention |False|**0.9107**|**0.4872**|  0.6270  |**0.6374**|
+|LSTM |Mean      |False|  0.8983  |  0.4518  |  0.6156  |  0.6267  |
+|LSTM |Max       |False|  0.9067  |  0.4816  |  0.6273  |  0.6358  |
+|LSTM |Attention |False|  0.9073  |  0.4778  |  0.6229  |  0.6362  |
+|CNN  |Mean      |False|  0.8974  |  0.4255  |  0.6113  |  0.6156  |
+|CNN  |Max       |False|  0.9048  |  0.4726  |  0.6187  |  0.6158  |
+|CNN  |Attention |False|  0.9052  |  0.4833  |  0.6197  |  0.6243  |
+|GRNN |Mean      |True |    |    |    |    |
+|GRNN |Max       |True |    |    |    |    |
+|GRNN |Attention |True |    |    |    |    |
+
+
+## Testing Accuracies by Combined Classifer
 |Model| Pooling  |Hierarchical|IMDB(2)|IMDB(10)|Yelp 2013|Yelp 2014|
 |:---:|:--------:|:----------:|:-----:|:------:|:-------:|:-------:|
 |GRNN |Mean      |False|  0.9174  |  0.4992  |**0.6483**|  0.6448  |
